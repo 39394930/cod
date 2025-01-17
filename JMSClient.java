@@ -1,140 +1,131 @@
 package apachetomeejms;
+/*
+import javax.jms.JMSException;
+import javax.jms.MessageConsumer;
+import javax.jms.Session;
+
+//import javax.jms.Connection;
+//import javax.jms.ConnectionFactory;
+
+import javax.jms.Message;
+import javax.jms.MessageListener;
+import javax.jms.TextMessage;
+
+import javax.jms.Topic;
+import javax.jms.TopicConnection;
+import javax.jms.TopicConnectionFactory;
+
+import javax.jms.TopicSession;
+import javax.jms.TopicSubscriber;
+*/
 
 import jakarta.jms.*;
+
 import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
+
 import java.util.Properties;
-import java.io.File;
-import java.io.FileOutputStream;
+
+import org.apache.activemq.ActiveMQConnectionFactory;
+
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.Base64;
 
 public class JMSClient {
+ protected static final String url = "tcp://localhost:61617";
+ public static void main(String[] args) {
+	String topicName = null;
+	Context jndiContext = null;
+	TopicConnectionFactory topicConnectionFactory = null;
+	TopicConnection topicConnection = null;
+	TopicSession topicSession = null;
+	Topic topic = null;
+	TopicSubscriber topicSubscriber = null;
+	TextListener topicListener = null;
+	//TextMessage message = null;
+	InputStreamReader inputStreamReader = null;
+	char answer = '\0';
+	/*	
+		if(args.length != 1) {
+			System.out.println("Usage: java SimpleTopicSubscriber <topic-name>");
+			System.exit(1);
+		}
+	*/	
+	topicName = new String(args[1]);
+        //topicName = new String("jms/topic/test");
+	System.out.println("Topic name = "+topicName);
+		
+	//JNDI context look-up + look-up factory & topic
+	try {
+                Properties props = new Properties();
+	 	 props.setProperty(Context.INITIAL_CONTEXT_FACTORY, "org.apache.activemq.jndi.ActiveMQInitialContextFactory");
+	 	 //props.setProperty(Context.PROVIDER_URL, "tcp://localhost:61617");
+		props.setProperty(Context.PROVIDER_URL, args[0]);
 
-    protected static final String url = "tcp://localhost:61617";  // Broker URL
+		jndiContext = new InitialContext(props);
+		//jndiContext = new InitialContext();
+			
+		topicConnectionFactory = (TopicConnectionFactory)jndiContext.lookup("ConnectionFactory");
+		//topic = (Topic)jndiContext.lookup(topicName);
+			
+	} catch(NamingException ne) {
+		ne.printStackTrace();
+		System.exit(2);
+	}
+		
+	try {
+		topicConnection = topicConnectionFactory.createTopicConnection();
+		topicSession = topicConnection.createTopicSession(false, Session.AUTO_ACKNOWLEDGE);
+		topic = topicSession.createTopic("jms/topic/test");
+		topicSubscriber = topicSession.createSubscriber(topic);
+			
+		topicListener = new TextListener();
+		topicSubscriber.setMessageListener(topicListener);
+		topicConnection.start();
+			System.out.println("Se asteapta trimiterea pozei...");
+			System.out.println("Pentru a inchide programul, apasa q + CR/LF");
+			inputStreamReader = new InputStreamReader(System.in);
+			while(!(answer == 'q')) {
+				try {
+					answer = (char) inputStreamReader.read();
+				} catch(IOException ioe) {
+					ioe.printStackTrace();
+				}
+			}
+		} catch(JMSException jmse) {
+			jmse.printStackTrace();
+		} finally {
+			if(topicConnection != null) {
+				try {
+					topicConnection.close();
+				} catch (JMSException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+}
 
-    public static void main(String[] args) {
-        String topicName = null;
-        Context jndiContext = null;
-        TopicConnectionFactory topicConnectionFactory = null;
-        TopicConnection topicConnection = null;
-        TopicSession topicSession = null;
-        Topic topic = null;
-        TopicSubscriber topicSubscriber = null;
-        TextListener topicListener = null;
-        InputStreamReader inputStreamReader = null;
-        char answer = '\0';
 
-        // Dacă nu există argumente, folosim valoarea implicită
-        if (args.length != 2) {
-            System.out.println("Imaginea se afla la adresa http://172.17.0.4 TOPIC:Topic_DAD");
-            System.exit(1);
-        }
+class TextListener implements MessageListener {
 
-        topicName = args[1];  // Numele topicului
-        System.out.println("Topic name = " + topicName);
+	@Override
+	public void onMessage(Message message) {
+			TextMessage msg = null;
+			
+			try {
+				if(message instanceof TextMessage) {
+					msg = (TextMessage)message;
+					System.out.println("Received message = "+msg.getText());
+				} else {
+					System.out.println("Binary messsage!");
+				}
+			} catch(JMSException jmse) {
+				jmse.printStackTrace();
+			} catch(Throwable t) {
+				t.printStackTrace();
+			}
+	}
 
-        // Configurarea JNDI context + look-up factory & topic
-        try {
-            Properties props = new Properties();
-            props.setProperty(Context.INITIAL_CONTEXT_FACTORY, "org.apache.activemq.jndi.ActiveMQInitialContextFactory");
-            props.setProperty(Context.PROVIDER_URL, args[0]);  // URL-ul brokerului
-
-            jndiContext = new InitialContext(props);
-            topicConnectionFactory = (TopicConnectionFactory) jndiContext.lookup("ConnectionFactory");
-            topic = (Topic) jndiContext.lookup(topicName);
-        } catch (NamingException ne) {
-            ne.printStackTrace();
-            System.exit(2);
-        }
-
-        // Conectarea la broker și abonarea la topic
-        try {
-            topicConnection = topicConnectionFactory.createTopicConnection();
-            topicSession = topicConnection.createTopicSession(false, Session.AUTO_ACKNOWLEDGE);
-            topicSubscriber = topicSession.createSubscriber(topic);
-
-            // Setarea listener-ului pentru mesaje
-            topicListener = new TextListener();
-            topicSubscriber.setMessageListener(topicListener);
-
-            // Pornirea conexiunii
-            topicConnection.start();
-
-            System.out.println("Se asteapta primirea imaginii... Pentru a inchide programul, apasa q + CR/LF");
-            inputStreamReader = new InputStreamReader(System.in);
-            while (!(answer == 'q')) {
-                try {
-                    answer = (char) inputStreamReader.read();
-                } catch (IOException ioe) {
-                    ioe.printStackTrace();
-                }
-            }
-        } catch (JMSException jmse) {
-            jmse.printStackTrace();
-        } finally {
-            if (topicConnection != null) {
-                try {
-                    topicConnection.close();
-                } catch (JMSException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-    }
-
-    // Listener care procesează mesajele primite
-    static class TextListener implements MessageListener {
-        @Override
-        public void onMessage(Message message) {
-            TextMessage msg = null;
-
-            try {
-                if (message instanceof TextMessage) {
-                    msg = (TextMessage) message;
-                    String jsonMessage = msg.getText();
-
-                    // Parsarea mesajului JSON fără org.json
-                    // Extragem manual valorile din JSON
-                    String imageBase64 = extractJsonValue(jsonMessage, "image");
-                    String fileName = extractJsonValue(jsonMessage, "fileName");
-
-                    // Decodarea imaginii din Base64
-                    byte[] imageBytes = Base64.getDecoder().decode(imageBase64);
-
-                    // Salvarea imaginii într-un fișier
-                    try (FileOutputStream fos = new FileOutputStream(new File(fileName))) {
-                        fos.write(imageBytes);
-                        System.out.println("Imaginea a fost salvată în fișier");
-                    }
-
-                } else {
-                    System.out.println("Mesajul nu este de tip TextMessage!");
-                }
-            } catch (JMSException jmse) {
-                jmse.printStackTrace();
-            } catch (Throwable t) {
-                t.printStackTrace();
-            }
-        }
-
-        // Funcție pentru a extrage valoarea unui câmp JSON manual
-        private String extractJsonValue(String jsonMessage, String key) {
-            int keyIndex = jsonMessage.indexOf("\"" + key + "\":");
-            if (keyIndex == -1) {
-                return null;
-            }
-
-            int startIndex = jsonMessage.indexOf("\"", keyIndex + key.length() + 3) + 1;
-            int endIndex = jsonMessage.indexOf("\"", startIndex);
-
-            if (startIndex == -1 || endIndex == -1) {
-                return null;
-            }
-
-            return jsonMessage.substring(startIndex, endIndex);
-        }
-    }
 }
